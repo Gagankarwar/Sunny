@@ -8,7 +8,8 @@ python-dotenv
 # Networking
 requests
 websockets
-
+gunicorn==23.0.0
+Werkzeug==3.0.3
 # API Integrations
 twilio
 openai
@@ -29,4 +30,4 @@ pytest-asyncio
 # UI
 streamlit
 
-anthropic
+deepseek

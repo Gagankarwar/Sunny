@@ -5,9 +5,7 @@ import streamlit as st
 import dotenv
 
 dotenv.load_dotenv(verbose=True)
-
-st.set_page_config(page_title="AI Dialer", page_icon="📞", layout="wide")
-
+st.set_page_config(page_title="SK Dialer", page_icon="📞", layout="wide")
 def display_call_interface():
     return st.text_input("Phone Number (format: +1XXXXXXXXXX)", value=os.getenv("YOUR_NUMBER") or "")
 
@@ -15,7 +13,7 @@ def fetch_all_transcripts():
     try:
         response = requests.get(f"https://{os.getenv('SERVER')}/all_transcripts")
         return response.json().get('transcripts', [])
-    except requests.RequestException as e:
+    except:
         st.error(f"Error fetching call list: {str(e)}")
         return []
 
@@ -30,10 +28,10 @@ if 'call_active' not in st.session_state:
     st.session_state.call_selector = "Current Call"
 
 with st.sidebar:
-    st.markdown("<h2 style='text-align: center; font-size: 2.5em;'>📞 AI Dialer</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; font-size: 2.5em;'>📞 SK Dialer </h2>", unsafe_allow_html=True)
     st.divider()
     
-    phone_number = display_call_interface()
+    phone_numbers = display_call_interface()
     
     st.session_state.system_message = st.text_area("System Message", value=st.session_state.system_message, disabled=st.session_state.call_active)
     st.session_state.initial_message = st.text_area("Initial Message", value=st.session_state.initial_message, disabled=st.session_state.call_active)
@@ -41,37 +39,38 @@ with st.sidebar:
     start_call = st.button("Start Call", disabled=st.session_state.call_active)
     end_call = st.button("End Call", disabled=not st.session_state.call_active)
 
-    if start_call and phone_number:
-        with st.spinner(f"Calling {phone_number}..."):
-            try:
-                response = requests.post(f"https://{os.getenv('SERVER')}/start_call", json={
-                    "to_number": phone_number,
-                    "system_message": st.session_state.system_message,
-                    "initial_message": st.session_state.initial_message
-                }, timeout=10)
-                call_data = response.json()
-                if call_sid := call_data.get('call_sid'):
-                    st.session_state.call_sid = call_sid
-                    st.session_state.transcript = []
-                    st.success(f"Call initiated. SID: {call_sid}")
-                    for _ in range(60):
-                        time.sleep(1)
-                        status = requests.get(f"https://{os.getenv('SERVER')}/call_status/{call_sid}").json().get('status')
-                        if status == 'in-progress':
-                            st.session_state.call_active = True
-                            st.session_state.call_selector = "Current Call"
-                            break
-                        if status in ['completed', 'failed', 'busy', 'no-answer']:
-                            st.error(f"Call ended: {status}")
-                            break
+    for phone_number in phone_numbers:
+        if start_call and phonenumbers:
+            with st.spinner(f"Calling {phone_number}..."):
+                try:
+                    response = requests.post(f"https://{os.getenv('SERVER')}/start_call", json={
+                        "to_number": phone_number,
+                        "system_message": st.session_state.system_message,
+                        "initial_message": st.session_state.initial_message
+                    }, timeout=10)
+                    call_data = response.json()
+                    if call_sid := call_data.get('call_sid'):
+                        st.session_state.call_sid = call_sid
+                        st.session_state.transcript = []
+                        st.success(f"Call initiated. SID: {call_sid}")
+                        for _ in range(60):
+                            time.sleep(1)
+                            status = requests.get(f"https://{os.getenv('SERVER')}/call_status/{call_sid}").json().get('status')
+                            if status == 'in-progress':
+                                st.session_state.call_active = True
+                                st.session_state.call_selector = "Current Call"
+                                break
+                            if status in ['completed', 'failed', 'busy', 'no-answer']:
+                                st.error(f"Call ended: {status}")
+                                break
+                        else:
+                            st.error("Timeout waiting for call to connect.")
                     else:
-                        st.error("Timeout waiting for call to connect.")
-                else:
-                    st.error(f"Failed to initiate call: {call_data}")
-            except requests.RequestException as e:
-                st.error(f"Error: {str(e)}")
-    elif start_call:
-        st.warning("Please enter a valid phone number.")
+                        st.error(f"Failed to initiate call: {call_data}")
+                except requests.RequestException as e:
+                    st.error(f"Error: {str(e)}")
+        elif start_call:
+            st.warning("Please enter a valid phone number.")
 
     if end_call:
         try:

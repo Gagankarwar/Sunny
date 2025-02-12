@@ -88,6 +88,7 @@ class DeepgramTTS(AbstractTTSService):
     async def generate(self, llm_reply, interaction_count):
         partial_response_index = llm_reply['partialResponseIndex']
         partial_response = llm_reply['partialResponse']
+        logger.info(f"partial_response")
 
         if not partial_response:
             return

@@ -12,6 +12,7 @@ from functions.function_manifest import tools
 from logger_config import get_logger
 from services.call_context import CallContext
 from services.event_emmiter import EventEmitter
+from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
 logger = get_logger("LLMService")
 
@@ -86,7 +87,7 @@ class AbstractLLMService(EventEmitter, ABC):
                 anthropic_tools.append(anthropic_tool)
         
         return anthropic_tools
-
+    
     def split_into_sentences(self, text):
         # Split the text into sentences, keeping the separators
         sentences = re.split(r'([.!?])', text)
@@ -138,7 +139,6 @@ class OpenAIService(AbstractLLMService):
                 if tool_calls:
                     for tool_call in tool_calls:
                         if tool_call.function and tool_call.function.name:
-                            logger.info(f"Function call detected: {tool_call.function.name}")
                             function_name = tool_call.function.name
                             function_args += tool_call.function.arguments or ""
                 else:
@@ -246,12 +246,178 @@ class AnthropicService(AbstractLLMService):
         except Exception as e:
             logger.error(f"Error in AnthropicService completion: {str(e)}")
 
+
+class MistralService(AbstractLLMService):
+    def __init__(self, context: CallContext):
+            super().__init__(context)
+            self.openai = AsyncOpenAI(api_key=os.getenv("MISTRAL_API_KEY"), base_url="https://integrate.api.nvidia.com/v1")         
+    async def completion(self, text: str, interaction_count: int, role: str = 'user', name: str = 'user'):
+        try:
+            self.user_context.append({"role": role, "content": text, "name": name})
+            messages = [{"role": "system", "content": self.system_message}] + self.user_context
+        
+            stream = await self.openai.chat.completions.create(
+                model="nv-mistralai/mistral-nemo-12b-instruct",
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                stream=True,
+            )
+
+            complete_response = ""
+            function_name = ""
+            function_args = ""
+
+            async for chunk in stream:
+                delta = chunk.choices[0].delta
+                #logger.info(f"delta {delta}")
+                content = delta.content or ""
+                tool_calls = delta.tool_calls
+                logger.info(f"{tool_calls}")
+
+                if tool_calls:
+                    for tool_call in tool_calls:
+                        if tool_call.function and tool_call.function.name:
+                            logger.info(f"Function call detected: {tool_call.function.name}")
+                            function_name = tool_call.function.name
+                            function_args += tool_call.function.arguments or ""
+                else:
+                    complete_response += content
+                    await self.emit_complete_sentences(content, interaction_count)
+
+                if chunk.choices[0].finish_reason == "tool_calls":
+                    logger.info(f"Function call detected: {function_name}")
+                    function_to_call = self.available_functions[function_name]
+                    function_args = self.validate_function_args(function_args)
+                    
+                    #tool_data = next((tool for tool in tools if tool['function']['name'] == function_name), None)
+                
+                    if function_name == "transfer_call":
+                        say =  "Transferring your call, please wait."
+                    elif function_name == "end_call":
+                        say = "Goodbye."
+                    else: 
+                        say = "Pardon me! Can you please repeat " 
+                        
+                
+                    await self.emit('llmreply', {
+                        "partialResponseIndex": None,
+                        "partialResponse": say
+                    }, interaction_count)
+
+                    self.user_context.append({"role": "assistant", "content": say})
+                    
+                    function_response = await function_to_call(self.context, function_args)
+                                        
+                    logger.info(f"Function {function_name} called with args: {function_args}")
+
+                    if function_name != "end_call":
+                        await self.completion(function_response, interaction_count, 'function', function_name)
+
+            # Emit any remaining content in the buffer
+            if self.sentence_buffer.strip():
+                await self.emit('llmreply', {
+                    "partialResponseIndex": self.partial_response_index,
+                    "partialResponse": self.sentence_buffer.strip()
+                }, interaction_count)
+                self.sentence_buffer = ""
+
+            self.user_context.append({"role": "assistant", "content": complete_response})
+
+        except Exception as e:
+            logger.error(f"Error in MistralService completion: {str(e)}")
+
+class DeepSeekService(AbstractLLMService):
+    def __init__(self, context: CallContext):
+            super().__init__(context)
+            self.openai = AsyncOpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url="https://integrate.api.nvidia.com/v1")         
+    async def completion(self, text: str, interaction_count: int, role: str = 'user', name: str = 'user'):
+        try:
+            self.user_context.append({"role": role, "content": text, "name": name})
+            messages = [{"role": "system", "content": self.system_message}] + self.user_context
+        
+            stream = await self.openai.chat.completions.create(
+                model="meta/llama-3.1-70b-instruct",
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                stream=True,
+            )
+
+            complete_response = ""
+            function_name = ""
+            function_args = ""
+
+            async for chunk in stream:
+                delta = chunk.choices[0].delta
+                #logger.info(f"delta {delta}")
+                content = delta.content or ""
+                tool_calls = delta.tool_calls
+
+                if tool_calls:
+                    for tool_call in tool_calls:
+                        if tool_call.function and tool_call.function.name:
+                            logger.info(f"Function call detected: {tool_call.function.name}")
+                            function_name = tool_call.function.name
+                            function_args += tool_call.function.arguments or ""
+                else:
+                    complete_response += content
+                    await self.emit_complete_sentences(content, interaction_count)
+
+                if chunk.choices[0].finish_reason == "tool_calls":
+                    logger.info(f"Function call detected: {function_name}")
+                    function_to_call = self.available_functions[function_name]
+                    function_args = self.validate_function_args(function_args)
+                    
+                    if function_name == "transfer_call":
+                        say =  "Transferring your call, please wait."
+                    elif function_name == "end_call":
+                        say = "Goodbye."
+                    else: 
+                        say = "Pardon me! Can you please repeat " 
+                        
+
+                    await self.emit('llmreply', {
+                        "partialResponseIndex": None,
+                        "partialResponse": say
+                    }, interaction_count)
+
+                    self.user_context.append({"role": "assistant", "content": say})
+                    
+                    function_response = await function_to_call(self.context, function_args)
+                                        
+                    logger.info(f"Function {function_name} called with args: {function_args}")
+
+                    if function_name != "end_call":
+                        await self.completion(function_response, interaction_count, 'function', function_name)
+
+            # Emit any remaining content in the buffer
+            if self.sentence_buffer.strip():
+                await self.emit('llmreply', {
+                    "partialResponseIndex": self.partial_response_index,
+                    "partialResponse": self.sentence_buffer.strip()
+                }, interaction_count)
+                self.sentence_buffer = ""
+
+            self.user_context.append({"role": "assistant", "content": complete_response})
+
+        except Exception as e:
+            logger.error(f"Error in DS completion: {str(e)}")
+
+
+
 class LLMFactory:
     @staticmethod
     def get_llm_service(service_name: str, context: CallContext) -> AbstractLLMService:
+        
+        
         if service_name.lower() == "openai":
             return OpenAIService(context)
         elif service_name.lower() == "anthropic":
             return AnthropicService(context)
+        elif service_name.lower() == "deepseek":
+            return DeepSeekService(context)
+        elif service_name.lower() == "mistral":
+            return MistralService(context)
         else:
             raise ValueError(f"Unsupported LLM service: {service_name}")

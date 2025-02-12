@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 
 class CallContext:
@@ -12,5 +12,6 @@ class CallContext:
         self.initial_message: str = ""
         self.start_time: Optional[str] = None
         self.end_time: Optional[str] = None
-        self.final_status: Optional[str] = None
+        self.final_status: Optional[str] = None        
+        self.details: Optional[Dict] = {}
         

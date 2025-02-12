@@ -17,14 +17,27 @@ from services.llm_service import LLMFactory
 from services.stream_service import StreamService
 from services.transcription_service import TranscriptionService
 from services.tts_service import TTSFactory
+import sys
 
-dotenv.load_dotenv()
+
+
+dotenv.load_dotenv(override=True)
+
+
+
+print(os.environ.get("SYSTEM_MESSAGE"))
+
 app = FastAPI()
 logger = get_logger("App")
 
 # Global dictionary to store call contexts for each server instance (should be replaced with a database in production)
 global call_contexts
 call_contexts = {}
+
+print(os.environ.get("SERVER"))
+print(os.environ.get("LLM_SERVICE"))
+
+
 
 # First route that gets called by Twilio when call is initiated
 @app.post("/incoming")
@@ -52,13 +65,14 @@ async def get_call_recording(call_sid: str):
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
 
-    llm_service_name = os.getenv("LLM_SERVICE", "openai")
+    llm_service_name = os.getenv("LLM_SERVICE", "deepseek")
     tts_service_name = os.getenv("TTS_SERVICE", "deepgram")
 
     logger.info(f"Using LLM service: {llm_service_name}")
     logger.info(f"Using TTS service: {tts_service_name}")
 
     llm_service = LLMFactory.get_llm_service(llm_service_name, CallContext())
+
     stream_service = StreamService(websocket)
     transcription_service = TranscriptionService()
     tts_service = TTSFactory.get_tts_service(tts_service_name)
@@ -109,10 +123,13 @@ async def websocket_endpoint(websocket: WebSocket):
 
     transcription_service.on('utterance', handle_utterance)
     transcription_service.on('transcription', handle_transcription)
+    logger.info("transcription_service done")
     llm_service.on('llmreply', handle_llm_reply)
+    logger.info("handle llm reply")
     tts_service.on('speech', handle_speech)
+    logger.info("SPEECH")
     stream_service.on('audiosent', handle_audio_sent)
-
+    logger.info("audio sent")
     # Queue for incoming WebSocket messages
     message_queue = asyncio.Queue()
 
@@ -276,6 +293,6 @@ if __name__ == "__main__":
     import uvicorn
     logger.info("Starting server...")
     logger.info(f"Backend server address set to: {os.getenv('SERVER')}")
-    port = int(os.getenv("PORT", 3000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
-
+   # port = int(os.getenv("PORT", 3000))
+   # uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))

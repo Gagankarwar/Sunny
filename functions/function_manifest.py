@@ -7,8 +7,7 @@ tools = [
             "parameters": {
                 "type": "object",
                 "properties": {}
-            },
-            "say": "Transferring your call, please wait."
+            }
         }
     },    
     
@@ -20,8 +19,8 @@ tools = [
             "parameters": {
                 "type": "object",
                 "properties": {}
-            },
-            "say": "Goodbye."
+            }
         }
     }
+
 ]
