@@ -18,26 +18,13 @@ from services.stream_service import StreamService
 from services.transcription_service import TranscriptionService
 from services.tts_service import TTSFactory
 import sys
-
-
-
 dotenv.load_dotenv(override=True)
-
-
-
-print(os.environ.get("SYSTEM_MESSAGE"))
-
 app = FastAPI()
 logger = get_logger("App")
 
 # Global dictionary to store call contexts for each server instance (should be replaced with a database in production)
 global call_contexts
 call_contexts = {}
-
-print(os.environ.get("SERVER"))
-print(os.environ.get("LLM_SERVICE"))
-
-
 
 # First route that gets called by Twilio when call is initiated
 @app.post("/incoming")
@@ -48,7 +35,6 @@ async def incoming_call() -> HTMLResponse:
     connect.stream(url=f"wss://{server}/connection")
     response.append(connect)
     return HTMLResponse(content=str(response), status_code=200)
-
 
 @app.get("/call_recording/{call_sid}")
 async def get_call_recording(call_sid: str):
@@ -64,15 +50,13 @@ async def get_call_recording(call_sid: str):
 @app.websocket("/connection")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-
-    llm_service_name = os.getenv("LLM_SERVICE", "deepseek")
+    llm_service_name = os.getenv("LLM_SERVICE", "openai")
     tts_service_name = os.getenv("TTS_SERVICE", "deepgram")
 
     logger.info(f"Using LLM service: {llm_service_name}")
     logger.info(f"Using TTS service: {tts_service_name}")
 
     llm_service = LLMFactory.get_llm_service(llm_service_name, CallContext())
-
     stream_service = StreamService(websocket)
     transcription_service = TranscriptionService()
     tts_service = TTSFactory.get_tts_service(tts_service_name)
@@ -206,7 +190,6 @@ async def start_call(request: Dict[str, str]):
     system_message = request.get("system_message")
     initial_message = request.get("initial_message")
     logger.info(f"Initiating call to {to_number}")
-
     service_url = f"https://{os.getenv('SERVER')}/incoming"
 
     if not to_number:

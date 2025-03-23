@@ -30,8 +30,9 @@ if 'call_active' not in st.session_state:
 with st.sidebar:
     st.markdown("<h2 style='text-align: center; font-size: 2.5em;'>📞 SK Dialer </h2>", unsafe_allow_html=True)
     st.divider()
-    
-    phone_numbers = display_call_interface()
+
+    text_input = display_call_interface()
+    phone_numbers = text_input.split(",")
     
     st.session_state.system_message = st.text_area("System Message", value=st.session_state.system_message, disabled=st.session_state.call_active)
     st.session_state.initial_message = st.text_area("Initial Message", value=st.session_state.initial_message, disabled=st.session_state.call_active)
@@ -40,7 +41,7 @@ with st.sidebar:
     end_call = st.button("End Call", disabled=not st.session_state.call_active)
 
     for phone_number in phone_numbers:
-        if start_call and phonenumbers:
+        if start_call and phone_number:
             with st.spinner(f"Calling {phone_number}..."):
                 try:
                     response = requests.post(f"https://{os.getenv('SERVER')}/start_call", json={

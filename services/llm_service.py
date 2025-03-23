@@ -131,14 +131,17 @@ class OpenAIService(AbstractLLMService):
             function_name = ""
             function_args = ""
 
+            
             async for chunk in stream:
                 delta = chunk.choices[0].delta
+                #logger.info(f"delta {delta}")
                 content = delta.content or ""
                 tool_calls = delta.tool_calls
 
                 if tool_calls:
                     for tool_call in tool_calls:
                         if tool_call.function and tool_call.function.name:
+                            logger.info(f"Function call detected: {tool_call.function.name}")
                             function_name = tool_call.function.name
                             function_args += tool_call.function.arguments or ""
                 else:
@@ -150,8 +153,13 @@ class OpenAIService(AbstractLLMService):
                     function_to_call = self.available_functions[function_name]
                     function_args = self.validate_function_args(function_args)
                     
-                    tool_data = next((tool for tool in tools if tool['function']['name'] == function_name), None)
-                    say = tool_data['function']['say']
+                    if function_name == "transfer_call":
+                        say =  "Transferring your call, please wait."
+                    elif function_name == "end_call":
+                        say = "Goodbye."
+                    else: 
+                        say = "Pardon me! Can you please repeat " 
+                        
 
                     await self.emit('llmreply', {
                         "partialResponseIndex": None,
@@ -166,7 +174,6 @@ class OpenAIService(AbstractLLMService):
 
                     if function_name != "end_call":
                         await self.completion(function_response, interaction_count, 'function', function_name)
-
             # Emit any remaining content in the buffer
             if self.sentence_buffer.strip():
                 await self.emit('llmreply', {
