@@ -31,8 +31,8 @@ with st.sidebar:
     st.markdown("<h2 style='text-align: center; font-size: 2.5em;'>📞 SK Dialer </h2>", unsafe_allow_html=True)
     st.divider()
 
-    text_input = display_call_interface()
-    phone_numbers = text_input.split(",")
+    text_ = display_call_interface()
+    phone_numbers = text_.split(",")
     
     st.session_state.system_message = st.text_area("System Message", value=st.session_state.system_message, disabled=st.session_state.call_active)
     st.session_state.initial_message = st.text_area("Initial Message", value=st.session_state.initial_message, disabled=st.session_state.call_active)

@@ -18,8 +18,16 @@ from services.stream_service import StreamService
 from services.transcription_service import TranscriptionService
 from services.tts_service import TTSFactory
 import sys
+from fastapi.middleware.cors import CORSMiddleware
 dotenv.load_dotenv(override=True)
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Change to ["https://caller.skfinancial-ca.com"] for security
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 logger = get_logger("App")
 
 # Global dictionary to store call contexts for each server instance (should be replaced with a database in production)
